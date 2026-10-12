@@ -1,27 +1,28 @@
-
 from typing import TypedDict
 
-class pipelenestate(TypedDict):
+import streamlit as st
+from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+from langgraph.graph import StateGraph, START, END
+
+load_dotenv()
+
+
+class PipelineState(TypedDict):
     raw_input: str
     edited_text: str
     script_text: str
     final_output: str
 
-from langchain_groq import ChatGroq
-from dotenv import load_dotenv
-load_dotenv()
-
 
 llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.7)
 
 
-#* Creating notes - Nodes is just like a python function
-def editor_node(state: pipelenestate):
-    """ stage 1 : Cleans up a grammar, removes typos, and refines the tone. """
+def editor_node(state: PipelineState):
+    """Stage 1: Cleans up the raw text."""
+    prompt = f"""
 
-    prompt = f""" 
-
-           Clean the given raw text.
+Clean the given raw text.
 
 Rules:
 - Remove extra spaces, blank lines, HTML tags, and scraping noise.
@@ -35,23 +36,18 @@ Return ONLY the cleaned text.
 
 Raw text:
 
- {state['raw_input']}
+{state['raw_input']}
 
- """
-
-
+"""
     response = llm.invoke(prompt)
+    return {"edited_text": response.content.strip()}
 
-    return {"edited_text" : response.content.strip()}
 
+def scriptwriter_node(state: PipelineState):
+    """Stage 2: Formats the clean text into an engaging video script."""
+    prompt = f"""
 
-def scriptwritter_node(state: pipelenestate):
-    """ Stage 2 : Formates the clean text into an engaging video script style. """
-    print("\n ----- [Stage 2 Executing Script writter Node ----]")
-
-    prompt = f""" 
-
-          Convert the given clean text into a short, engaging video script.
+Convert the given clean text into a short, engaging video script.
 
 Rules:
 - Start with a strong hook.
@@ -66,22 +62,18 @@ Return ONLY the final video script.
 
 Clean text:
 
-{state['edited_text']}    
-    
+{state['edited_text']}
 
- """
-
+"""
     response = llm.invoke(prompt)
-    return {"script_text" : response.content.strip()} 
+    return {"script_text": response.content.strip()}
 
-def translater_node(state: pipelenestate):
-    """ Stage 3 : Trnslate the script text into natural Hinglish. """
 
-    print("\n ---- [stage 3] Executing english translator node ----")
-
+def translator_node(state: PipelineState):
+    """Stage 3: Translates the script into natural Hinglish."""
     prompt = f"""
 
-            Convert the given text into natural, conversational Hinglish.
+Convert the given text into natural, conversational Hinglish.
 
 Rules:
 - Use a natural mix of Hindi and English, like people commonly speak in India.
@@ -99,49 +91,132 @@ Text:
 {state['script_text']}
 
 """
-
-
     response = llm.invoke(prompt)
-
-    return {"final_output" : response.content.strip()}
-
+    return {"final_output": response.content.strip()}
 
 
-# * now our state and nodes are ready and now time to create graph.
-
-
-from langgraph.graph import StateGraph, START, END
-
-#* Creating the graph
-graph = StateGraph(pipelenestate)
-
-# * add nodes in our graph
+graph = StateGraph(PipelineState)
 graph.add_node("editor", editor_node)
-graph.add_node("scriptwritter", scriptwritter_node)
-graph.add_node("translator", translater_node)
+graph.add_node("scriptwriter", scriptwriter_node)
+graph.add_node("translator", translator_node)
 
-
-#* Add edges (Sequantial - one after one)
 graph.add_edge(START, "editor")
-graph.add_edge("editor", "scriptwritter")
-graph.add_edge("scriptwritter", "translator")
+graph.add_edge("editor", "scriptwriter")
+graph.add_edge("scriptwriter", "translator")
 graph.add_edge("translator", END)
 
+pipeline_app = graph.compile()
 
 
-# compile the graph
+# ---------------- Streamlit UI ----------------
+st.set_page_config(page_title="ScriptFlow", page_icon="🎬", layout="centered")
 
-app = graph.compile()
+st.markdown(
+    """
+<style>
+#MainMenu, footer {visibility: hidden;}
+.block-container {padding-top: 2.2rem; max-width: 820px;}
 
-result = app.invoke({"raw_input" : """   Artificial Intelligence (AI) is   changing the way we live and work.
+.hero {
+    padding: 1.8rem 2rem; border-radius: 20px; margin-bottom: 1.6rem;
+    background: linear-gradient(135deg, #6d28d9 0%, #2563eb 55%, #06b6d4 100%);
+    color: #fff; box-shadow: 0 10px 30px rgba(37, 99, 235, .25);
+}
+.hero h1 {margin: 0; font-size: 2.1rem; color: #fff; letter-spacing: -.5px;}
+.hero p {margin: .4rem 0 0; font-size: 1.02rem; opacity: .93;}
 
-AI can analyze large amounts of data, identify patterns, and make predictions.  For example, AI is used in healthcare to help doctors detect diseases, in banking to detect fraud, and in recommendation systems to suggest movies and products.
+.steps {display: flex; gap: .6rem; margin: 1rem 0 .4rem;}
+.step {
+    flex: 1; padding: .75rem .9rem; border-radius: 14px;
+    border: 1px solid rgba(128,128,128,.25); background: rgba(128,128,128,.06);
+}
+.step .n {font-size: .72rem; opacity: .6; text-transform: uppercase; letter-spacing: .08em;}
+.step .t {font-weight: 600; font-size: .95rem; margin-top: .1rem;}
+.step .s {font-size: .78rem; opacity: .65; margin-top: .15rem;}
+.step.run {border-color: #f59e0b; background: rgba(245,158,11,.10);}
+.step.run .s {color: #f59e0b; opacity: 1;}
+.step.done {border-color: #10b981; background: rgba(16,185,129,.10);}
+.step.done .s {color: #10b981; opacity: 1;}
 
-  However, AI is not perfect. It can sometimes make mistakes or produce incorrect results. That's why human supervision is still important.
+.stTextArea textarea {border-radius: 14px; font-size: 1rem; line-height: 1.55;}
+.stButton > button[kind="primary"] {
+    border-radius: 12px; font-weight: 600; padding: .65rem 1rem;
+    background: linear-gradient(90deg, #6d28d9, #2563eb); border: none;
+}
+.stButton > button[kind="primary"]:hover {filter: brightness(1.1);}
+.stTabs [data-baseweb="tab"] {font-weight: 600;}
+</style>
 
-AI is becoming a powerful tool, but the goal is not to replace humans completely. Instead, it can help humans work faster, make better decisions, and solve complex problems. """})
+<div class="hero">
+  <h1>🎬 ScriptFlow</h1>
+  <p>Paste raw text and get a clean, narration-ready video script in Hinglish.</p>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+STAGES = [
+    ("editor", "Editor", "Cleaning text"),
+    ("scriptwriter", "Script writer", "Writing script"),
+    ("translator", "Translator", "Hinglish"),
+]
 
 
-print("Your result are : - \n\n")
-print(result['final_output'])
+def render_steps(status: dict) -> str:
+    html = '<div class="steps">'
+    for i, (key, title, _) in enumerate(STAGES, 1):
+        state = status.get(key, "wait")
+        label = {"wait": "Waiting", "run": "Running…", "done": "Done ✓"}[state]
+        html += (
+            f'<div class="step {state}"><div class="n">Stage {i}</div>'
+            f'<div class="t">{title}</div><div class="s">{label}</div></div>'
+        )
+    return html + "</div>"
 
+
+raw_text = st.text_area(
+    "Your text",
+    height=280,
+    placeholder="Paste your article, notes or scraped text here…",
+)
+
+run = st.button("✨ Generate script", type="primary", use_container_width=True, disabled=not raw_text.strip())
+
+steps_box = st.empty()
+steps_box.markdown(render_steps(st.session_state.get("status", {})), unsafe_allow_html=True)
+
+if run:
+    status = {"editor": "run"}
+    steps_box.markdown(render_steps(status), unsafe_allow_html=True)
+    result = {"raw_input": raw_text.strip()}
+    order = [k for k, _, _ in STAGES]
+
+    try:
+        for chunk in pipeline_app.stream({"raw_input": raw_text.strip()}, stream_mode="updates"):
+            for node, update in chunk.items():
+                result.update(update)
+                status[node] = "done"
+                idx = order.index(node) + 1
+                if idx < len(order):
+                    status[order[idx]] = "run"
+                steps_box.markdown(render_steps(status), unsafe_allow_html=True)
+        st.session_state.result = result
+        st.session_state.status = status
+    except Exception as e:
+        st.error(f"Something went wrong: {e}")
+
+result = st.session_state.get("result")
+if result:
+    st.markdown("### Result")
+    tab_final, tab_script, tab_clean = st.tabs(["🎯 Hinglish script", "📝 English script", "🧹 Cleaned text"])
+    with tab_final:
+        with st.container(border=True):
+            st.markdown(result["final_output"].replace("\n", "  \n"))
+        with st.expander("Copy"):
+            st.code(result["final_output"], language=None, wrap_lines=True)
+    with tab_script:
+        with st.container(border=True):
+            st.markdown(result["script_text"].replace("\n", "  \n"))
+    with tab_clean:
+        with st.container(border=True):
+            st.markdown(result["edited_text"].replace("\n", "  \n"))
