@@ -1,7 +1,11 @@
 pydantic
 langgraph
 langchain
+langchain-community
+langchain-core
 langchain-groq
+requests
+tavily-python
 python-dotenv
-
+langchainhub
 streamlit
