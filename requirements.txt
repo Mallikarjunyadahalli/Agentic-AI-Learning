@@ -9,4 +9,9 @@ tavily-python
 python-dotenv
 langchainhub
 streamlit
-openai
+
+langchain-text-splitters
+langchain-huggingface
+sentence-transformers
+faiss-cpu
+pypdf
