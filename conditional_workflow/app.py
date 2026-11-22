@@ -7,9 +7,8 @@ load_dotenv()
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS,Chroma
 from langchain_groq import ChatGroq
-
 
 from typing import TypedDict, Annotated
 from langgraph.graph.message import add_messages
@@ -39,12 +38,13 @@ def retrive_context(file_path: str):
 
     chunks = splitter.split_documents(documents=documents)
 
-    vector_db = FAISS(chunks, embedding_model)
+    vector_db = Chroma(chunks, embedding_model)
 
     return vector_db.as_retriever(search_kwargs={"k" : 3})
 
-academic_retriver = retrive_context("academic_handbook.pdf")
-fess_retriver = retrive_context("Fee_structure.pdf")
+academic_retriver = retrive_context(r"C:\Users\kam\OneDrive\Desktop\Agentic AI\conditional_workflow\academic_handbook.pdf")
+
+fess_retriver = retrive_context(r"C:\Users\kam\OneDrive\Desktop\Agentic AI\conditional_workflow\Fee_structure.pdf")
 
 # Classify the programee
 def classifier_node(state: State):
@@ -222,3 +222,36 @@ graph.add_edge("fee", "response")
 graph.add_edge("general", "response")
 
 graph.add_edge("response", END)
+app = graph.compile()
+
+
+# Run the code 
+print("Well come to the collage assistent.")
+
+print("Which program are you learn.")
+print(" \t 1. BBA ")
+print(" \t 2. BE ")
+
+choice = input("\nEnter 1 or 2 :  ")
+
+programee_map = {
+    "1" : "BSE",
+    "2" : "BE"
+}
+
+student_programee = programee_map.get(choice, "BSE")
+
+print(f"\n Great You are set as a {student_programee} student.")
+
+while True:
+    user_query = input("You: ")
+
+    if user_query.lower() in ['exit', 'quit']:
+        break
+
+    result = app.invoke({
+        "programee" : student_programee,
+        "messages" : [("human", user_query)]
+    })
+
+    print(f"\n\nAI: {result['messages'][-1].content}")
