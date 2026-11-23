@@ -4,6 +4,7 @@ langchain
 langchain-community
 langchain-core
 langchain-groq
+langchain-tavily
 requests
 tavily-python
 python-dotenv
